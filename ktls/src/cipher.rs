@@ -54,7 +54,8 @@ impl TryFrom<SupportedCipherSuite> for KtlsCipherSuite {
 
 impl KtlsCipherSuite {
     #[inline]
-    /// Converts this cipher suite into the equivalent `rustls` [`SupportedCipherSuite`].
+    /// Converts this cipher suite into the equivalent `rustls`
+    /// [`SupportedCipherSuite`].
     pub const fn as_supported_cipher_suite(&self) -> SupportedCipherSuite {
         match self.version {
             KtlsVersion::TLS12 => match self.typ {

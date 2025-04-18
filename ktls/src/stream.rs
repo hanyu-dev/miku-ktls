@@ -232,7 +232,10 @@ where
                         );
                     }
                     TlsGetRecordType::ApplicationData => {
-                        unreachable!("received TLS application in recvmsg, this is supposed to happen in the poll_read codepath")
+                        unreachable!(
+                            "received TLS application in recvmsg, this is supposed to happen in \
+                             the poll_read codepath"
+                        )
                     }
                     TlsGetRecordType::Unknown(t) => {
                         // just ignore the record?

@@ -49,8 +49,8 @@ impl<IO> Setup<IO> {
         }
     }
 
-    /// Try to recover from an error. This is used to allow the user to continue using the
-    /// TLS stream after an error has occurred.
+    /// Try to recover from an error. This is used to allow the user to continue
+    /// using the TLS stream after an error has occurred.
     ///
     /// This returns the inner TLS stream and the drained data.
     pub fn try_recover(&mut self) -> Option<(Option<Vec<u8>>, TlsStream<IO>)> {
@@ -60,13 +60,15 @@ impl<IO> Setup<IO> {
     /// Execute kTLS configuration for this socket.
     ///
     /// If this call succeeds, data can be written and read from this socket,
-    /// and the kernel takes care of encryption (and key updates, etc.) transparently.
+    /// and the kernel takes care of encryption (and key updates, etc.)
+    /// transparently.
     ///
-    /// The inner IO type must be wrapped in [`CorkStream`] since it's the only way
-    /// to drain a `rustls` stream cleanly. See its documentation for details.
+    /// The inner IO type must be wrapped in [`CorkStream`] since it's the only
+    /// way to drain a `rustls` stream cleanly. See its documentation for
+    /// details.
     ///
-    /// For server side, I'm not clear how rekeying is handled (probably via control
-    /// messages, but can't find a code sample for it).
+    /// For server side, I'm not clear how rekeying is handled (probably via
+    /// control messages, but can't find a code sample for it).
     pub async fn execute(&mut self) -> Result<KtlsStream<IO>, Error>
     where
         IO: AsRawFd + AsyncRead + AsyncWrite + Unpin,
@@ -117,9 +119,9 @@ impl<IO> Setup<IO> {
     }
 }
 
-/// The TLS stream type. This is a wrapper around the tokio-rustls client and server
-/// stream types. It is used to allow the `execute` method to return a single type
-/// regardless of whether it is a client or server stream.
+/// The TLS stream type. This is a wrapper around the tokio-rustls client and
+/// server stream types. It is used to allow the `execute` method to return a
+/// single type regardless of whether it is a client or server stream.
 pub enum TlsStream<IO> {
     Client(tokio_rustls::client::TlsStream<CorkStream<IO>>),
     Server(tokio_rustls::server::TlsStream<CorkStream<IO>>),
