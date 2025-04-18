@@ -1,12 +1,14 @@
 //! Crate error type
 
-#[derive(thiserror::Error, Debug)]
+use rustls::SupportedCipherSuite;
+
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("failed to enable TLS ULP (upper level protocol): {0}")]
     UlpError(#[source] std::io::Error),
 
     #[error("kTLS compatibility error: {0}")]
-    KtlsCompatibility(#[from] crate::ffi::KtlsCompatibilityError),
+    KtlsCompatibility(#[from] KtlsCompatibilityError),
 
     #[error("failed to export secrets")]
     ExportSecrets(#[source] rustls::Error),
@@ -22,4 +24,26 @@ pub enum Error {
 
     #[error("reuse after kTLS has been successfully setup")]
     ReuseAfterKtlsSetup,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, thiserror::Error)]
+pub enum CipherSuiteError {
+    #[error("TLS 1.2 support not built in")]
+    Tls12NotBuiltIn,
+
+    #[error("unsupported cipher suite")]
+    UnsupportedCipherSuite(SupportedCipherSuite),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum KtlsCompatibilityError {
+    #[error("cipher suite not supported with kTLS: {0:?}")]
+    UnsupportedCipherSuite(SupportedCipherSuite),
+
+    #[error("wrong size key")]
+    WrongSizeKey,
+
+    #[error("wrong size iv")]
+    WrongSizeIv,
 }

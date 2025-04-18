@@ -166,11 +166,13 @@ where
     }
 }
 
-impl<IO> AsyncReadReady for CorkStream<IO>
+impl<'a, IO> AsyncReadReady<'a> for CorkStream<IO>
 where
-    IO: AsyncReadReady,
+    IO: AsyncReadReady<'a>,
 {
-    fn poll_read_ready(&self, cx: &mut task::Context<'_>) -> task::Poll<io::Result<()>> {
+    type Output = IO::Output;
+
+    fn poll_read_ready(&'a self, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
         self.io.poll_read_ready(cx)
     }
 }

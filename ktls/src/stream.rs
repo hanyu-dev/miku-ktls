@@ -1,15 +1,17 @@
+pub mod cork;
+
+use std::{
+    io::{self, IoSliceMut},
+    os::unix::io::AsRawFd,
+    pin::Pin,
+    task,
+};
+
 use nix::{
     errno::Errno,
     sys::socket::{recvmsg, ControlMessageOwned, MsgFlags, SockaddrIn, TlsGetRecordType},
 };
 use num_enum::FromPrimitive;
-use std::{
-    io::{self, IoSliceMut},
-    os::unix::prelude::AsRawFd,
-    pin::Pin,
-    task,
-};
-
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 use crate::AsyncReadReady;
@@ -74,9 +76,9 @@ enum TlsAlertDescription {
     Other(u8),
 }
 
-impl<IO> AsyncRead for KtlsStream<IO>
+impl<'a, IO> AsyncRead for KtlsStream<IO>
 where
-    IO: AsRawFd + AsyncRead + AsyncReadReady,
+    IO: AsRawFd + AsyncRead + AsyncReadReady<'a>,
 {
     fn poll_read(
         self: Pin<&mut Self>,

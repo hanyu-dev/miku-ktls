@@ -6,11 +6,17 @@ use std::{
 };
 
 use rustls::ExtractedSecrets;
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite};
 
-use crate::{async_read_ready::AsyncReadReady, cork_stream::CorkStream, stream::KtlsStream, Error};
-use tokio::io::AsyncReadExt;
+use crate::{
+    stream::{cork::CorkStream, KtlsStream},
+    utils::async_read_ready::AsyncReadReady,
+    Error,
+};
 
+/// The setup type being used to configure the kTLS stream.
+///
+/// See [`Setup::execute`] for details.
 pub struct Setup<IO> {
     inner: Option<TlsStream<IO>>,
     drained: Option<Vec<u8>>,
@@ -31,14 +37,24 @@ impl<IO> Setup<IO> {
 
     #[inline]
     /// Initialize a new setup with the socket (that server accepts).
-    pub const fn new_server_stream(inner: tokio_rustls::server::TlsStream<CorkStream<IO>>) -> Self
+    pub const fn new_server_stream<'a>(
+        inner: tokio_rustls::server::TlsStream<CorkStream<IO>>,
+    ) -> Self
     where
-        IO: AsRawFd + AsyncRead + AsyncReadReady + AsyncWrite + Unpin,
+        IO: AsRawFd + AsyncRead + AsyncReadReady<'a> + AsyncWrite + Unpin,
     {
         Setup {
             inner: Some(TlsStream::Server(inner)),
             drained: None,
         }
+    }
+
+    /// Try to recover from an error. This is used to allow the user to continue using the
+    /// TLS stream after an error has occurred.
+    ///
+    /// This returns the inner TLS stream and the drained data.
+    pub fn try_recover(&mut self) -> Option<(Option<Vec<u8>>, TlsStream<IO>)> {
+        self.inner.take().map(|inner| (self.drained.take(), inner))
     }
 
     /// Execute kTLS configuration for this socket.
@@ -63,6 +79,9 @@ impl<IO> Setup<IO> {
 
             crate::ffi::setup_ulp(inner.as_raw_fd()).map_err(Error::UlpError)?;
         }
+
+        // The following steps may have errors and all of them are unrecoverable,
+        // so we just take the inner TLS stream.
 
         let Some(mut inner) = self.inner.take() else {
             unreachable!("has checked for None");
@@ -200,11 +219,11 @@ async fn drain(stream: &mut (impl AsyncRead + Unpin)) -> std::io::Result<Option<
     note = "use `Setup::new_server_stream(...).execute()` instead"
 )]
 /// See [`Setup::new_server_stream`] and [`Setup::execute`].
-pub async fn config_ktls_server<IO>(
+pub async fn config_ktls_server<'a, IO>(
     inner: tokio_rustls::server::TlsStream<CorkStream<IO>>,
 ) -> Result<KtlsStream<IO>, Error>
 where
-    IO: AsRawFd + AsyncRead + AsyncReadReady + AsyncWrite + Unpin,
+    IO: AsRawFd + AsyncRead + AsyncReadReady<'a> + AsyncWrite + Unpin,
 {
     Setup::new_server_stream(inner).execute().await
 }

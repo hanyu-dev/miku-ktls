@@ -1,16 +1,20 @@
-use std::os::unix::prelude::RawFd;
+use std::{io, mem::size_of_val, os::unix::io::RawFd, ptr::addr_of};
 
-use ktls_sys::bindings as ktls;
+pub(crate) use ktls_sys::bindings;
 use rustls::{
     internal::msgs::{enums::AlertLevel, message::Message},
     AlertDescription, ConnectionTrafficSecrets, SupportedCipherSuite,
 };
 
-pub(crate) const TLS_1_2_VERSION_NUMBER: u16 = (((ktls::TLS_1_2_VERSION_MAJOR & 0xFF) as u16) << 8)
-    | ((ktls::TLS_1_2_VERSION_MINOR & 0xFF) as u16);
+use crate::error::KtlsCompatibilityError;
 
-pub(crate) const TLS_1_3_VERSION_NUMBER: u16 = (((ktls::TLS_1_3_VERSION_MAJOR & 0xFF) as u16) << 8)
-    | ((ktls::TLS_1_3_VERSION_MINOR & 0xFF) as u16);
+pub(crate) const TLS_1_2_VERSION_NUMBER: u16 = (((bindings::TLS_1_2_VERSION_MAJOR & 0xFF) as u16)
+    << 8)
+    | ((bindings::TLS_1_2_VERSION_MINOR & 0xFF) as u16);
+
+pub(crate) const TLS_1_3_VERSION_NUMBER: u16 = (((bindings::TLS_1_3_VERSION_MAJOR & 0xFF) as u16)
+    << 8)
+    | ((bindings::TLS_1_3_VERSION_MINOR & 0xFF) as u16);
 
 /// `setsockopt` level constant: TCP
 const SOL_TCP: libc::c_int = 6;
@@ -25,9 +29,10 @@ const SOL_TLS: libc::c_int = 282;
 const TLS_TX: libc::c_int = 1;
 
 /// `setsockopt` SOL_TLS level constant: receive (read)
-const TLX_RX: libc::c_int = 2;
+const TLS_RX: libc::c_int = 2;
 
-pub fn setup_ulp(fd: RawFd) -> std::io::Result<()> {
+/// `setsockopt(fd, SOL_TCP, TCP_ULP, "tls", size_of("tls"))`
+pub(crate) fn setup_ulp(fd: RawFd) -> io::Result<()> {
     unsafe {
         if libc::setsockopt(
             fd,
@@ -37,78 +42,85 @@ pub fn setup_ulp(fd: RawFd) -> std::io::Result<()> {
             3,
         ) < 0
         {
-            return Err(std::io::Error::last_os_error());
+            return Err(io::Error::last_os_error());
         }
     }
 
     Ok(())
 }
 
-#[derive(Clone, Copy, Debug)]
+/// `setsockopt(fd, SOL_TLS, {TLS_TX or TLS_RX}, info, size_of(info))`
+pub(crate) fn setup_tls_info(
+    fd: RawFd,
+    dir: Direction,
+    info: CryptoInfo,
+) -> Result<(), crate::Error> {
+    unsafe {
+        if libc::setsockopt(fd, SOL_TLS, dir.as_c_int(), info.as_ptr(), info.size() as _) < 0 {
+            return Err(crate::Error::TlsCryptoInfoError(io::Error::last_os_error()));
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy)]
+/// `SOL_TLS` direction.
 pub enum Direction {
     // Transmit
     Tx,
+
     // Receive
     Rx,
 }
 
-impl From<Direction> for libc::c_int {
-    fn from(val: Direction) -> Self {
-        match val {
-            Direction::Tx => TLS_TX,
-            Direction::Rx => TLX_RX,
+impl Direction {
+    #[inline]
+    const fn as_c_int(self) -> libc::c_int {
+        match self {
+            Self::Tx => TLS_TX,
+            Self::Rx => TLS_RX,
         }
     }
 }
 
 #[allow(dead_code)]
+/// `SOL_TLS` crypto info.
+///
+/// This is a wrapper around the kernel structs.
 pub enum CryptoInfo {
-    AesGcm128(ktls::tls12_crypto_info_aes_gcm_128),
-    AesGcm256(ktls::tls12_crypto_info_aes_gcm_256),
-    AesCcm128(ktls::tls12_crypto_info_aes_ccm_128),
-    Chacha20Poly1305(ktls::tls12_crypto_info_chacha20_poly1305),
-    Sm4Gcm(ktls::tls12_crypto_info_sm4_gcm),
-    Sm4Ccm(ktls::tls12_crypto_info_sm4_ccm),
+    AesGcm128(bindings::tls12_crypto_info_aes_gcm_128),
+    AesGcm256(bindings::tls12_crypto_info_aes_gcm_256),
+    AesCcm128(bindings::tls12_crypto_info_aes_ccm_128),
+    Chacha20Poly1305(bindings::tls12_crypto_info_chacha20_poly1305),
+    Sm4Gcm(bindings::tls12_crypto_info_sm4_gcm),
+    Sm4Ccm(bindings::tls12_crypto_info_sm4_ccm),
 }
 
 impl CryptoInfo {
-    /// Return the system struct as a pointer.
+    /// Return the system struct as a raw pointer.
     pub fn as_ptr(&self) -> *const libc::c_void {
         match self {
-            CryptoInfo::AesGcm128(info) => info as *const _ as *const libc::c_void,
-            CryptoInfo::AesGcm256(info) => info as *const _ as *const libc::c_void,
-            CryptoInfo::AesCcm128(info) => info as *const _ as *const libc::c_void,
-            CryptoInfo::Chacha20Poly1305(info) => info as *const _ as *const libc::c_void,
-            CryptoInfo::Sm4Gcm(info) => info as *const _ as *const libc::c_void,
-            CryptoInfo::Sm4Ccm(info) => info as *const _ as *const libc::c_void,
+            Self::AesGcm128(info) => addr_of!(info) as *const libc::c_void,
+            Self::AesGcm256(info) => addr_of!(info) as *const libc::c_void,
+            Self::AesCcm128(info) => addr_of!(info) as *const libc::c_void,
+            Self::Chacha20Poly1305(info) => addr_of!(info) as *const libc::c_void,
+            Self::Sm4Gcm(info) => addr_of!(info) as *const libc::c_void,
+            Self::Sm4Ccm(info) => addr_of!(info) as *const libc::c_void,
         }
     }
 
+    #[inline]
     /// Return the system struct size.
     pub fn size(&self) -> usize {
         match self {
-            CryptoInfo::AesGcm128(_) => std::mem::size_of::<ktls::tls12_crypto_info_aes_gcm_128>(),
-            CryptoInfo::AesGcm256(_) => std::mem::size_of::<ktls::tls12_crypto_info_aes_gcm_256>(),
-            CryptoInfo::AesCcm128(_) => std::mem::size_of::<ktls::tls12_crypto_info_aes_ccm_128>(),
-            CryptoInfo::Chacha20Poly1305(_) => {
-                std::mem::size_of::<ktls::tls12_crypto_info_chacha20_poly1305>()
-            }
-            CryptoInfo::Sm4Gcm(_) => std::mem::size_of::<ktls::tls12_crypto_info_sm4_gcm>(),
-            CryptoInfo::Sm4Ccm(_) => std::mem::size_of::<ktls::tls12_crypto_info_sm4_ccm>(),
+            Self::AesGcm128(info) => size_of_val(info),
+            Self::AesGcm256(info) => size_of_val(info),
+            Self::AesCcm128(info) => size_of_val(info),
+            Self::Chacha20Poly1305(info) => size_of_val(info),
+            Self::Sm4Gcm(info) => size_of_val(info),
+            Self::Sm4Ccm(info) => size_of_val(info),
         }
     }
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum KtlsCompatibilityError {
-    #[error("cipher suite not supported with kTLS: {0:?}")]
-    UnsupportedCipherSuite(SupportedCipherSuite),
-
-    #[error("wrong size key")]
-    WrongSizeKey,
-
-    #[error("wrong size iv")]
-    WrongSizeIv,
 }
 
 impl CryptoInfo {
@@ -130,10 +142,10 @@ impl CryptoInfo {
                 // Aes128Gcm variant.
 
                 match key.as_ref().len() {
-                    16 => CryptoInfo::AesGcm128(ktls::tls12_crypto_info_aes_gcm_128 {
-                        info: ktls::tls_crypto_info {
+                    16 => CryptoInfo::AesGcm128(bindings::tls12_crypto_info_aes_gcm_128 {
+                        info: bindings::tls_crypto_info {
                             version,
-                            cipher_type: ktls::TLS_CIPHER_AES_GCM_128 as _,
+                            cipher_type: bindings::TLS_CIPHER_AES_GCM_128 as _,
                         },
                         iv: iv
                             .as_ref()
@@ -153,10 +165,10 @@ impl CryptoInfo {
                             .expect("AES-GCM-128 salt is 4 bytes"),
                         rec_seq: seq.to_be_bytes(),
                     }),
-                    32 => CryptoInfo::AesGcm256(ktls::tls12_crypto_info_aes_gcm_256 {
-                        info: ktls::tls_crypto_info {
+                    32 => CryptoInfo::AesGcm256(bindings::tls12_crypto_info_aes_gcm_256 {
+                        info: bindings::tls_crypto_info {
                             version,
-                            cipher_type: ktls::TLS_CIPHER_AES_GCM_256 as _,
+                            cipher_type: bindings::TLS_CIPHER_AES_GCM_256 as _,
                         },
                         iv: iv
                             .as_ref()
@@ -180,10 +192,10 @@ impl CryptoInfo {
                 }
             }
             ConnectionTrafficSecrets::Aes256Gcm { key, iv } => {
-                CryptoInfo::AesGcm256(ktls::tls12_crypto_info_aes_gcm_256 {
-                    info: ktls::tls_crypto_info {
+                CryptoInfo::AesGcm256(bindings::tls12_crypto_info_aes_gcm_256 {
+                    info: bindings::tls_crypto_info {
                         version,
-                        cipher_type: ktls::TLS_CIPHER_AES_GCM_256 as _,
+                        cipher_type: bindings::TLS_CIPHER_AES_GCM_256 as _,
                     },
                     iv: iv
                         .as_ref()
@@ -205,10 +217,10 @@ impl CryptoInfo {
                 })
             }
             ConnectionTrafficSecrets::Chacha20Poly1305 { key, iv } => {
-                CryptoInfo::Chacha20Poly1305(ktls::tls12_crypto_info_chacha20_poly1305 {
-                    info: ktls::tls_crypto_info {
+                CryptoInfo::Chacha20Poly1305(bindings::tls12_crypto_info_chacha20_poly1305 {
+                    info: bindings::tls_crypto_info {
                         version,
-                        cipher_type: ktls::TLS_CIPHER_CHACHA20_POLY1305 as _,
+                        cipher_type: bindings::TLS_CIPHER_CHACHA20_POLY1305 as _,
                     },
                     iv: iv
                         .as_ref()
@@ -218,7 +230,7 @@ impl CryptoInfo {
                         .as_ref()
                         .try_into()
                         .expect("Chacha20-Poly1305 key is 32 bytes"),
-                    salt: ktls::__IncompleteArrayField::new(),
+                    salt: bindings::__IncompleteArrayField::new(),
                     rec_seq: seq.to_be_bytes(),
                 })
             }
@@ -227,16 +239,6 @@ impl CryptoInfo {
             }
         })
     }
-}
-
-pub fn setup_tls_info(fd: RawFd, dir: Direction, info: CryptoInfo) -> Result<(), crate::Error> {
-    let ret = unsafe { libc::setsockopt(fd, SOL_TLS, dir.into(), info.as_ptr(), info.size() as _) };
-    if ret < 0 {
-        return Err(crate::Error::TlsCryptoInfoError(
-            std::io::Error::last_os_error(),
-        ));
-    }
-    Ok(())
 }
 
 const TLS_SET_RECORD_TYPE: libc::c_int = 1;
@@ -265,7 +267,7 @@ impl<const N: usize> Cmsg<N> {
     }
 }
 
-pub fn send_close_notify(fd: RawFd) -> std::io::Result<()> {
+pub(crate) fn send_close_notify(fd: RawFd) -> std::io::Result<()> {
     let mut data = vec![];
     Message::build_alert(AlertLevel::Warning, AlertDescription::CloseNotify)
         .payload
@@ -288,7 +290,7 @@ pub fn send_close_notify(fd: RawFd) -> std::io::Result<()> {
 
     let ret = unsafe { libc::sendmsg(fd, &msg, 0) };
     if ret < 0 {
-        return Err(std::io::Error::last_os_error());
+        return Err(io::Error::last_os_error());
     }
     Ok(())
 }
