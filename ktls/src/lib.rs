@@ -4,7 +4,7 @@ use ktls_sys::bindings as sys;
 use rustls::{Connection, SupportedCipherSuite, SupportedProtocolVersion};
 
 #[cfg(all(not(feature = "ring"), not(feature = "aws_lc_rs")))]
-compile_error!("This crate needs wither the 'ring' or 'aws_lc_rs' feature enabled");
+compile_error!("This crate needs either the 'ring' or 'aws_lc_rs' feature enabled");
 #[cfg(all(feature = "ring", feature = "aws_lc_rs"))]
 compile_error!("The 'ring' and 'aws_lc_rs' features are mutually exclusive");
 #[cfg(feature = "aws_lc_rs")]
