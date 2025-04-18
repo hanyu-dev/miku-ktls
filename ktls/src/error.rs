@@ -19,4 +19,7 @@ pub enum Error {
 
     #[error("no negotiated cipher suite: call config_ktls_* only /after/ the handshake")]
     NoNegotiatedCipherSuite,
+
+    #[error("reuse after kTLS has been successfully setup")]
+    ReuseAfterKtlsSetup,
 }

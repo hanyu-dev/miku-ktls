@@ -9,6 +9,11 @@ Configures kTLS ([kernel TLS
 offload](https://www.kernel.org/doc/html/latest/networking/tls-offload.html))
 for any type that implements `AsRawFd`, given a rustls `ServerConnection`.
 
+> [!TIP]
+> This crate is modified from the original one.
+>
+> The core change is that will return the underlying TlsStream when error (fallback mode).
+
 ## License
 
 This project is primarily distributed under the terms of both the MIT license
