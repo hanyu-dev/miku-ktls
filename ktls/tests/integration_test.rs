@@ -6,18 +6,17 @@ use std::{
     time::Duration,
 };
 
-use ktls::{AsyncReadReady, CorkStream, KtlsCipherSuite, KtlsCipherType, KtlsVersion};
+use lazy_static::lazy_static;
+use miku_ktls::{AsyncReadReady, CorkStream, KtlsCipherSuite, KtlsCipherType, KtlsVersion};
 use rcgen::generate_simple_self_signed;
-use rustls::{
-    client::Resumption, crypto::CryptoProvider, ClientConfig, RootCertStore, ServerConfig,
-    SupportedCipherSuite,
-};
-
 #[cfg(feature = "aws_lc_rs")]
 use rustls::crypto::aws_lc_rs::cipher_suite;
 #[cfg(feature = "ring")]
 use rustls::crypto::ring::cipher_suite;
-
+use rustls::{
+    client::Resumption, crypto::CryptoProvider, ClientConfig, RootCertStore, ServerConfig,
+    SupportedCipherSuite,
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -70,7 +69,7 @@ fn all_suites() -> Vec<SupportedCipherSuite> {
 
 #[tokio::test]
 async fn compatible_ciphers() {
-    let cc = ktls::CompatibleCiphers::new().await.unwrap();
+    let cc = miku_ktls::CompatibleCiphers::new().await.unwrap();
     for suite in all_suites() {
         assert!(cc.is_compatible(suite));
     }
@@ -78,7 +77,7 @@ async fn compatible_ciphers() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn compatible_ciphers_single_thread() {
-    let cc = ktls::CompatibleCiphers::new().await.unwrap();
+    let cc = miku_ktls::CompatibleCiphers::new().await.unwrap();
     for suite in all_suites() {
         assert!(cc.is_compatible(suite));
     }
@@ -121,12 +120,12 @@ async fn server_tests(version: KtlsVersion, cipher_type: KtlsCipherType, flavor:
 }
 
 async fn server_test_inner(cipher_suite: KtlsCipherSuite, flavor: ServerTestFlavor) {
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         // .with_env_filter(EnvFilter::new("rustls=trace,debug"))
         // .with_env_filter(EnvFilter::new("debug"))
         .with_env_filter(EnvFilter::new("trace"))
         .pretty()
-        .init();
+        .try_init();
 
     let subject_alt_names = vec!["localhost".to_string()];
 
@@ -164,7 +163,7 @@ async fn server_test_inner(cipher_suite: KtlsCipherSuite, flavor: ServerTestFlav
             // the draining logic
             tokio::time::sleep(Duration::from_millis(100)).await;
 
-            let mut stream = ktls::config_ktls_server(stream).await.unwrap();
+            let mut stream = miku_ktls::config_ktls_server(stream).await.unwrap();
             debug!("Configured kTLS");
 
             debug!("Server reading data (1/5)");
@@ -300,12 +299,12 @@ enum ClientTestFlavor {
 }
 
 async fn client_test_inner(cipher_suite: KtlsCipherSuite, flavor: ClientTestFlavor) {
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         // .with_env_filter(EnvFilter::new("rustls=trace,debug"))
         // .with_env_filter(EnvFilter::new("debug"))
         .with_env_filter(EnvFilter::new("trace"))
         .pretty()
-        .init();
+        .try_init();
 
     let subject_alt_names = vec!["localhost".to_string()];
 
@@ -389,7 +388,7 @@ async fn client_test_inner(cipher_suite: KtlsCipherSuite, flavor: ClientTestFlav
         .await
         .unwrap();
 
-    let stream = ktls::config_ktls_client(stream).await.unwrap();
+    let stream = miku_ktls::config_ktls_client(stream).await.unwrap();
     let mut stream = SpyStream(stream, "client");
 
     debug!("Client writing data (1/5)");
@@ -463,11 +462,13 @@ where
     }
 }
 
-impl<IO> AsyncReadReady for SpyStream<IO>
+impl<'a, IO> AsyncReadReady<'a> for SpyStream<IO>
 where
-    IO: AsyncReadReady,
+    IO: AsyncReadReady<'a>,
 {
-    fn poll_read_ready(&self, cx: &mut task::Context<'_>) -> task::Poll<io::Result<()>> {
+    type Output = IO::Output;
+
+    fn poll_read_ready(&'a self, cx: &mut task::Context<'_>) -> task::Poll<Self::Output> {
         self.0.poll_read_ready(cx)
     }
 }
