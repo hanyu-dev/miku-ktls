@@ -12,7 +12,7 @@ pub use cipher::{KtlsCipherSuite, KtlsCipherType};
 pub use error::{CipherSuiteError, Error};
 pub use ffi::CryptoInfo;
 #[allow(deprecated)]
-pub use setup::{config_ktls_client, config_ktls_server, Setup};
+pub use setup::{config_ktls_client, config_ktls_server, Setup, TlsStream};
 pub use stream::{cork::CorkStream, KtlsStream};
 pub use utils::{
     async_read_ready::AsyncReadReady,

@@ -1,6 +1,6 @@
 [package]
 name = "miku-ktls"
-version = "7.0.0-rc.1"
+version = "7.0.0-rc.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/rustls/ktls"
