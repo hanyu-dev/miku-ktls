@@ -13,7 +13,7 @@ pub enum KtlsVersion {
 impl KtlsVersion {
     #[inline]
     /// Converts into the equivalent `rustls` [`SupportedProtocolVersion`].
-    pub const fn as_supported_version(&self) -> &'static SupportedProtocolVersion {
+    pub fn as_supported_version(&self) -> &'static SupportedProtocolVersion {
         match self {
             Self::TLS12 => &rustls::version::TLS12,
             Self::TLS13 => &rustls::version::TLS13,

@@ -7,7 +7,6 @@ use std::{
 };
 
 use ktls::{AsyncReadReady, CorkStream, KtlsCipherSuite, KtlsCipherType, KtlsVersion};
-use lazy_static::lazy_static;
 use rcgen::generate_simple_self_signed;
 use rustls::{
     client::Resumption, crypto::CryptoProvider, ClientConfig, RootCertStore, ServerConfig,

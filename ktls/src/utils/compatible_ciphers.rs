@@ -24,8 +24,7 @@ pub struct CompatibleCiphers {
 
 impl CompatibleCiphers {
     /// List compatible ciphers. This listens on a TCP socket and blocks for a
-    /// little while. Do once at the very start of a program. Should probably be
-    /// behind a lazy_static / once_cell
+    /// little while. Do once at the very start of a program.
     pub async fn new() -> io::Result<Self> {
         let mut ciphers = CompatibleCiphers::default();
 

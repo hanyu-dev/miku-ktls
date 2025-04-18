@@ -56,7 +56,7 @@ impl KtlsCipherSuite {
     #[inline]
     /// Converts this cipher suite into the equivalent `rustls`
     /// [`SupportedCipherSuite`].
-    pub const fn as_supported_cipher_suite(&self) -> SupportedCipherSuite {
+    pub fn as_supported_cipher_suite(&self) -> SupportedCipherSuite {
         match self.version {
             KtlsVersion::TLS12 => match self.typ {
                 KtlsCipherType::AesGcm128 => cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
