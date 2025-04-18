@@ -1,4 +1,4 @@
-use std::{io, mem::size_of_val, os::unix::io::RawFd, ptr::addr_of};
+use std::{io, mem::size_of_val, os::unix::io::RawFd};
 
 pub(crate) use ktls_sys::bindings;
 use rustls::{
@@ -100,12 +100,12 @@ impl CryptoInfo {
     /// Return the system struct as a raw pointer.
     pub fn as_ptr(&self) -> *const libc::c_void {
         match self {
-            Self::AesGcm128(info) => addr_of!(info) as *const libc::c_void,
-            Self::AesGcm256(info) => addr_of!(info) as *const libc::c_void,
-            Self::AesCcm128(info) => addr_of!(info) as *const libc::c_void,
-            Self::Chacha20Poly1305(info) => addr_of!(info) as *const libc::c_void,
-            Self::Sm4Gcm(info) => addr_of!(info) as *const libc::c_void,
-            Self::Sm4Ccm(info) => addr_of!(info) as *const libc::c_void,
+            Self::AesGcm128(info) => info as *const _ as *const libc::c_void,
+            Self::AesGcm256(info) => info as *const _ as *const libc::c_void,
+            Self::AesCcm128(info) => info as *const _ as *const libc::c_void,
+            Self::Chacha20Poly1305(info) => info as *const _ as *const libc::c_void,
+            Self::Sm4Gcm(info) => info as *const _ as *const libc::c_void,
+            Self::Sm4Ccm(info) => info as *const _ as *const libc::c_void,
         }
     }
 
