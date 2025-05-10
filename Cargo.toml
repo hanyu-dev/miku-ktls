@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["ktls-sys"]
+members = ["ktls", "ktls-sys"]
 
 [workspace.package]
 edition = "2021"

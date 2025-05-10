@@ -1,0 +1,16 @@
+[package]
+name = "miku-ktls"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+
+[lints]
+workspace = true
